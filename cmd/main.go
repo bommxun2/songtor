@@ -47,8 +47,8 @@ func main() {
 	v1 := app.Group("/v1")
 	v1.Post("/notifications", notificationHandler.CreateNotification)
 
-	log.Println("Server is running on port 3000")
-	if err := app.Listen(":3000"); err != nil {
+	log.Println("Server is running on port 8080")
+	if err := app.Listen(":8080"); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
 }
