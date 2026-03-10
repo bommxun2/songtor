@@ -22,7 +22,6 @@ import (
 	"gorm.io/gorm"
 
 	database "songtor/config"
-	"songtor/internal/models"
 )
 
 var db *gorm.DB
@@ -80,17 +79,17 @@ func processMessage(ctx context.Context, msg events.SQSMessage) error {
 	msgID := aws.ToString(attrID.StringValue)
 	replyTo := aws.ToString(attrReply.StringValue)
 
-	var req models.DivertRequest
+	var req DivertRequest
 	if err := json.Unmarshal([]byte(msg.Body), &req); err != nil {
 		log.Printf("Failed to unmarshal body: %v", err)
 		return nil
 	}
 
-	var response models.DivertResponse
+	var response DivertResponse
 	// Business Logic & Database Transaction
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// Idempotency Check
-		processed := models.ProcessedMessage{MessageID: msgID}
+		processed := ProcessedMessage{MessageID: msgID}
 		if err := tx.Create(&processed).Error; err != nil {
 			if errors.Is(err, gorm.ErrDuplicatedKey) {
 				log.Printf("Message %s already processed. Skipping.", msgID)
@@ -106,7 +105,7 @@ func processMessage(ctx context.Context, msg events.SQSMessage) error {
 		}
 
 		// Business Status Check
-		var notification models.NotificationRecord
+		var notification NotificationRecord
 		if err := tx.Where("notification_id = ?", req.NotificationID).First(&notification).Error; err != nil {
 			response = createRejectResponse(req, "NOT_FOUND", "Notification not found")
 			return nil
@@ -122,7 +121,7 @@ func processMessage(ctx context.Context, msg events.SQSMessage) error {
 			return err
 		}
 
-		response = models.DivertResponse{
+		response = DivertResponse{
 			NotificationID: req.NotificationID,
 			RequestID:      req.RequestID,
 			Status:         "CONFIRMED",
@@ -140,8 +139,8 @@ func processMessage(ctx context.Context, msg events.SQSMessage) error {
 	return publishResponse(ctx, replyTo, msgID, response)
 }
 
-func createRejectResponse(req models.DivertRequest, code, msg string) models.DivertResponse {
-	return models.DivertResponse{
+func createRejectResponse(req DivertRequest, code, msg string) DivertResponse {
+	return DivertResponse{
 		NotificationID: req.NotificationID,
 		RequestID:      req.RequestID,
 		Status:         "REJECTED",
@@ -150,7 +149,7 @@ func createRejectResponse(req models.DivertRequest, code, msg string) models.Div
 	}
 }
 
-func publishResponse(ctx context.Context, queueURL, correlationID string, resp models.DivertResponse) error {
+func publishResponse(ctx context.Context, queueURL, correlationID string, resp DivertResponse) error {
 	body, _ := json.Marshal(resp)
 
 	msgType := "AmbulanceDivertConfirmed"
