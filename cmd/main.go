@@ -34,7 +34,7 @@ func main() {
 
 	// Run database migrations
 	log.Println("Running Auto Migration...")
-	err = db.AutoMigrate(&models.NotificationRecord{}, &models.PatientData{})
+	err = db.AutoMigrate(&models.NotificationRecord{}, &models.PatientData{}, &models.ProcessedMessage{})
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
