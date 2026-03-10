@@ -1,0 +1,37 @@
+- name: Deploy Songtor App to EC2
+  hosts: _Songtor_App_Server
+  become: yes
+  vars:
+    ansible_ssh_private_key_file: "./songtor-key.pem"
+    ansible_user: ec2-user
+  
+  tasks:
+    - name: Install Docker and Docker Compose (Amazon Linux 2023)
+      dnf:
+        name: 
+          - docker
+          - docker-compose-plugin
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create App Directory
+      file:
+        path: /home/ec2-user/app
+        state: directory
+        owner: ec2-user
+
+    - name: Copy Code and Docker Compose
+      copy:
+        src: ../../
+        dest: /home/ec2-user/app/
+        owner: ec2-user
+
+    - name: Run Docker Compose
+      shell:
+        cmd: docker compose up -d --build
+        chdir: /home/ec2-user/app
