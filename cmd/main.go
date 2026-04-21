@@ -1,61 +1,76 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 
 	database "songtor/config"
 	"songtor/internal/handlers"
 	"songtor/internal/models"
+	workers "songtor/internal/worker"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: No .env file found. Falling back to system environment variables.")
-	}
+	_ = godotenv.Load()
 
-	// Load database configulation
+	// 1. Database Setup with Retry
+	var db *gorm.DB
+	var err error
 	dbConfig := database.Config{
-		User:     getEnv("DB_USER", "test_user"),
-		Password: getEnv("DB_PASSWORD", "test_password"),
-		Host:     getEnv("DB_HOST", "127.0.0.1"),
-		Port:     getEnv("DB_PORT", "3306"),
-		DBName:   getEnv("DB_NAME", "test_db"),
+		User:     os.Getenv("DB_USER"),
+		Password: os.Getenv("DB_PASSWORD"),
+		Host:     os.Getenv("DB_HOST"),
+		Port:     os.Getenv("DB_PORT"),
+		DBName:   os.Getenv("DB_NAME"),
 	}
 
-	// Connect to MySQL database
-	db, err := database.ConnectGorm(dbConfig)
-	if err != nil {
-		log.Fatalf("Could not connect to database: %v", err)
+	for i := 0; i < 10; i++ {
+		db, err = database.ConnectGorm(dbConfig)
+		if err == nil {
+			break
+		}
+		log.Printf("Failed to connect to database (attempt %d/10): %v", i+1, err)
+		time.Sleep(5 * time.Second)
 	}
 
-	// Run database migrations
-	log.Println("Running Auto Migration...")
-	err = db.AutoMigrate(&models.NotificationRecord{}, &models.PatientData{}, &models.ProcessedMessage{})
 	if err != nil {
+		log.Fatalf("Database connection failed after retries: %v", err)
+	}
+
+	log.Println("Running migrations...")
+	if err := db.AutoMigrate(&models.NotificationRecord{}, &models.PatientData{}, &models.OutboxEvent{}); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	// Initialize Fiber App
-	app := fiber.New()
+	// 2. AWS Setup
+	awsCfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		log.Printf("Warning: Failed to load AWS config: %v", err)
+	}
+	snsClient := sns.NewFromConfig(awsCfg)
 
-	notificationHandler := handlers.NewNotificationHandler(db)
+	// 3. Handlers & Routes
+	app := fiber.New()
+	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
+	listIncomingHandler := handlers.NewListIncomingHandler(db)
 
 	v1 := app.Group("/v1")
 	v1.Post("/notifications", notificationHandler.CreateNotification)
+	v1.Get("/hospitals/:hospital_id/incoming-notifications", listIncomingHandler.ListIncomingPatients)
 
-	log.Println("Server is running on port 8080")
+	// 4. Background Workers
+	workers.StartOutboxWorker(db, snsClient)
+
+	log.Println("Server starting on :8080")
 	if err := app.Listen(":8080"); err != nil {
-		log.Fatalf("Error starting server: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
-}
-
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return fallback
 }
