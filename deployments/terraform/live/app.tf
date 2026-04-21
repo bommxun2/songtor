@@ -80,6 +80,7 @@ module "sqs" {
 
   request_queue_name = "inbound-load-req"
   reply_queue_name   = "patient-reported-reply"
+  sns_topic_arn      = module.sns.sns_topic_arn
 }
 
 module "inbound_load_lambda" {
