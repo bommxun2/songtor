@@ -2,154 +2,184 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"reflect"
-	"strings"
-	"time"
+	"songtor/internal/dto"
+	"songtor/internal/models"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-
-	"songtor/internal/models"
 )
 
 type NotificationHandler struct {
-	Validator *validator.Validate
-	DB        *gorm.DB
+	db                             *gorm.DB
+	topicArn                       string
+	HOSPITAL_RESOURCE_SERVICE_HOST string
 }
 
-func NewNotificationHandler(db *gorm.DB) *NotificationHandler {
-	v := validator.New()
-
-	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
-		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-		if name == "-" {
-			return ""
-		}
-		return name
-	})
-
-	return &NotificationHandler{Validator: v, DB: db}
+func NewNotificationHandler(db *gorm.DB, topicArn string, HOSPITAL_RESOURCE_SERVICE_HOST string) *NotificationHandler {
+	return &NotificationHandler{
+		db:                             db,
+		topicArn:                       topicArn,
+		HOSPITAL_RESOURCE_SERVICE_HOST: HOSPITAL_RESOURCE_SERVICE_HOST,
+	}
 }
 
 func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
-	// Create a unique Trace ID for this request to help with debugging and log correlation
-	traceID := uuid.New().String()
-
-	// Pull out Idempotency-Key from Header
-	idempKey := c.Get("Idempotency-Key")
-	if idempKey == "" {
-		return sendErrorResponse(c, fiber.StatusBadRequest, "Idempotency-Key header is required", traceID)
+	// Parse the request body
+	var req dto.EmergencyRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	// Parse JSON Body
-	req := new(models.CreateNotificationRequest)
-	if err := c.BodyParser(req); err != nil {
-		return sendErrorResponse(c, fiber.StatusBadRequest, "Invalid JSON body", traceID)
+	// Validate the request
+	if err := ValidateEmergencyRequest(&req, c); err != nil {
+		return err
 	}
 
-	// Validate Request body
-	if err := h.Validator.Struct(req); err != nil {
-		return sendErrorResponse(c, fiber.StatusBadRequest, formatValidationError(err), traceID)
-	}
+	// Generate a unique notification ID
+	notificationID := uuid.New().String()
+	indempotencyKey := uuid.New()
 
-	// Convert optional fields to pointers
-	var agePtr *int
-	if req.PatientInfo.Age > 0 {
-		agePtr = &req.PatientInfo.Age
-	}
-
-	var genderPtr *string
-	if req.PatientInfo.Gender != "" {
-		genderPtr = &req.PatientInfo.Gender
-	}
-
-	var bpPtr *string
-	if req.Vitals.Bp != "" {
-		bpPtr = &req.Vitals.Bp
-	}
-
-	var hrPtr *int
-	if req.Vitals.Hr > 0 {
-		hrPtr = &req.Vitals.Hr
-	}
-
-	var spo2Ptr *int
-	if req.Vitals.Spo2 > 0 {
-		spo2Ptr = &req.Vitals.Spo2
-	}
-
-	// Convert Attachment URLs to JSON String
-	attachBytes, _ := json.Marshal(req.AttachmentURLs)
-
-	// Create Notification ID (e.g. NOTIF-20240601-1a2b)
-	dateStr := time.Now().Format("20060102")
-	notificationID := fmt.Sprintf("NOTIF-%s-%s", dateStr, uuid.New().String()[:4])
-
-	// Map request data to NotificationRecord model
-	record := models.NotificationRecord{
+	// Create the notification record
+	notification := models.NotificationRecord{
 		ID:             notificationID,
 		HospitalID:     req.HospitalID,
 		AmbulanceID:    req.AmbulanceID,
-		Status:         "EN_ROUTE",
-		IdempotencyKey: idempKey,
+		IdempotencyKey: indempotencyKey.String(),
 		PatientData: models.PatientData{
-			NotificationID: notificationID,
 			TriageLevel:    req.TriageLevel,
 			Symptom:        req.Symptom,
-			PatientAge:     agePtr,
-			PatientGender:  genderPtr,
-			Bp:             bpPtr,
-			Hr:             hrPtr,
-			Spo2:           spo2Ptr,
-			AttachmentURLs: string(attachBytes),
+			CategoryAge:    &req.PatientInfo.AgeCategory,
+			Gender:         &req.PatientInfo.Gender,
+			Bp:             &req.Vitals.BP,
+			Hr:             &req.Vitals.HR,
+			Spo2:           &req.Vitals.SpO2,
+			AttachmentURLs: req.AttachmentURLs,
 		},
 	}
 
-	// Create record in database
-	if err := h.DB.Create(&record).Error; err != nil {
-		// Check if error is due to duplicate Idempotency-Key
-		if strings.Contains(err.Error(), "Duplicate entry") {
-			return sendErrorResponse(c, fiber.StatusConflict, "Request already processed (Duplicate Idempotency-Key)", traceID)
-		}
+	/*
+		if h.HOSPITAL_RESOURCE_SERVICE_HOST != "" {
+			isResourceAvailable := false
 
-		// Case when database is unreachable or other internal error
-		return sendErrorResponse(c, fiber.StatusInternalServerError, "Failed to save notification to database", traceID)
+			// Check hospital resources
+			agent := fiber.Get("http://" + h.HOSPITAL_RESOURCE_SERVICE_HOST + "/hospital/" + req.HospitalID + "/resources").
+				agent.Timeout(20 * time.Second)
+
+			statusCode, body, errs := agent.Bytes()
+			if errs != nil || statusCode != fiber.StatusOK {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital resources"})
+			} else {
+				// Parse the hospital resource response
+				var resource HospitalResourceResponse
+				if err := json.Unmarshal(body, &resource); err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to parse JSON response"})
+				} else {
+					isResourceAvailable = true
+				}
+			}
+
+			if isResourceAvailable {
+				// Check if any resource is in CRITICAL status
+				for _, resource := range resource.Resources {
+					if resource.resourceStatus == "CRITICAL" {
+						return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
+					}
+				}
+			}
+		} else {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
+		}
+	*/
+
+	tx := h.db.Begin()
+	defer func() {
+		// If there is a panic, rollback the transaction to prevent partial commits
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Create the notification record
+	if err := tx.Create(&notification).Error; err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
 	}
 
-	// Response with success
-	return c.Status(fiber.StatusCreated).JSON(models.SuccessResponse{
-		NotificationID: notificationID,
-		Status:         "EN_ROUTE",
-		Message:        "Notification received. ER team alerted.",
+	// Create outbox event for SNS if topic ARN is configured
+	if h.topicArn != "" {
+		patientTransferReq := dto.PatientTransferRequest{
+			DestinationHospitalID: req.HospitalID,
+			Characteristics:       dto.Characteristics(req.PatientInfo),
+			Media: dto.Media{
+				MissingPersonPhoto: req.AttachmentURLs[0],
+			},
+			ReportedBy: "PreArrivalNotificationService",
+		}
+		messageBytes, err := json.Marshal(patientTransferReq)
+		if err != nil {
+			fmt.Printf("Failed to marshal SNS message: %v\n", err)
+		}
+
+		outboxEvent := models.OutboxEvent{
+			TopicARN: h.topicArn,
+			Payload:  string(messageBytes),
+			Status:   "PENDING",
+		}
+
+		if err := tx.Create(&outboxEvent).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create outbox event"})
+		}
+	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Transaction commit failed"})
+	}
+
+	// Return the response
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"notification_id": notification.ID,
+		"status":          notification.Status,
+		"message":         "Created notification successfully",
 	})
 }
 
-func formatValidationError(err error) string {
-	var validationErrors validator.ValidationErrors
-	if errors.As(err, &validationErrors) {
-		firstErr := validationErrors[0]
-		switch firstErr.Tag() {
-		case "required":
-			return fmt.Sprintf("%s required", firstErr.Field())
-		case "oneof":
-			return fmt.Sprintf("%s must be one of RED, YELLOW, GREEN, BLACK", firstErr.Field())
-		default:
-			return fmt.Sprintf("%s is invalid", firstErr.Field())
-		}
+func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
+	if req.HospitalID == "" || req.PatientInfo.PhysicalDesc == "" || req.PatientInfo.AgeCategory == "" ||
+		req.PatientInfo.LifeStatus == "" || req.PatientInfo.Gender == "" || req.TriageLevel == "" || req.Symptom == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":    "Missing required fields",
+			"code":     "VALIDATION_ERROR",
+			"trace_id": c.Get("X-Trace-ID"),
+		})
 	}
-	return "validation failed"
-}
 
-func sendErrorResponse(c *fiber.Ctx, status int, message string, traceID string) error {
-	return c.Status(status).JSON(models.ErrorResponse{
-		Error: models.ErrorDetail{
-			Code:    "VALIDATION_ERROR",
-			Message: message,
-			TraceID: traceID,
-		},
-	})
+	if req.TriageLevel != "RED" && req.TriageLevel != "YELLOW" && req.TriageLevel != "GREEN" && req.TriageLevel != "BLACK" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":    "Invalid triage level",
+			"code":     "VALIDATION_ERROR",
+			"trace_id": c.Get("X-Trace-ID"),
+		})
+	}
+
+	if req.PatientInfo.AgeCategory != "ADULT" && req.PatientInfo.AgeCategory != "INFANTS" && req.PatientInfo.AgeCategory != "TEEN" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":    "Invalid age category",
+			"code":     "VALIDATION_ERROR",
+			"trace_id": c.Get("X-Trace-ID"),
+		})
+	}
+
+	if req.PatientInfo.LifeStatus != "ALIVE" && req.PatientInfo.LifeStatus != "DECEASED" && req.PatientInfo.LifeStatus != "UNKNOWN" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":    "Invalid life status",
+			"code":     "VALIDATION_ERROR",
+			"trace_id": c.Get("X-Trace-ID"),
+		})
+	}
+
+	return nil
 }
