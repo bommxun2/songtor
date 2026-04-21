@@ -35,7 +35,12 @@ jobs:
 
       - name: Deploy ECR Repository First
         working-directory: deployments/terraform/live
-        run: tofu apply -target="module.ecr" -auto-approve
+        run: |
+          if aws ecr describe-repositories --repository-names go-app > /dev/null 2>&1; then
+            echo "ECR repository go-app already exists. Importing into OpenTofu state..."
+            tofu import module.ecr.aws_ecr_repository.app go-app || true
+          fi
+          tofu apply -target="module.ecr" -auto-approve
 
       - name: Login to Amazon ECR
         id: login-ecr
