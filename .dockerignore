@@ -1,0 +1,12 @@
+.git
+.terraform
+.vscode
+*.tfstate*
+*.zip
+bootstrap
+vendor
+node_modules
+*.pdf
+assets
+deployments/terraform/live/.terraform
+deployments/terraform/live/inbound_load.zip
