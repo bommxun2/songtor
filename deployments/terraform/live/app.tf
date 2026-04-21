@@ -5,6 +5,11 @@ terraform {
       version = "6.41.0"
     }
   }
+  backend "s3" {
+    bucket = "songtor-terraform-state"
+    key    = "terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 provider "aws" {
