@@ -10,3 +10,8 @@ variable "sns_topic_arn" {
   type        = string
   default     = null
 }
+
+variable "enable_sns_subscription" {
+  type        = bool
+  default     = false
+}

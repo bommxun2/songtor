@@ -81,6 +81,7 @@ module "sqs" {
   request_queue_name = "inbound-load-req"
   reply_queue_name   = "reply-queue"
   sns_topic_arn      = module.sns.sns_topic_arn
+  enable_sns_subscription = true
 }
 
 module "inbound_load_lambda" {
