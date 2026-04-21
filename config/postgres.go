@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -19,11 +19,11 @@ type Config struct {
 }
 
 func ConnectGorm(cfg Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName,
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=require TimeZone=Asia/Bangkok",
+		cfg.Host, cfg.User, cfg.Password, cfg.DBName, cfg.Port,
 	)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
@@ -37,6 +37,6 @@ func ConnectGorm(cfg Config) (*gorm.DB, error) {
 		sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	}
 
-	log.Println("Successfully connected to MySQL via GORM!")
+	log.Println("Successfully connected to PostgreSQL via GORM!")
 	return db, nil
 }
