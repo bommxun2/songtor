@@ -79,7 +79,7 @@ module "sqs" {
   source = "../modules/sqs"
 
   request_queue_name = "inbound-load-req"
-  reply_queue_name   = "patient-reported-reply"
+  reply_queue_name   = "reply-queue"
   sns_topic_arn      = module.sns.sns_topic_arn
 }
 
