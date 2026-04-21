@@ -79,7 +79,7 @@ module "sqs" {
   source = "../modules/sqs"
 
   request_queue_name = "inbound-load-req"
-  reply_queue_name   = "inbound-load-reply"
+  reply_queue_name   = "patient-reported-reply"
 }
 
 module "inbound_load_lambda" {
