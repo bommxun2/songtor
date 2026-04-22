@@ -4,7 +4,7 @@ variable "container_image" { type = string }
 variable "ecs_subnet_id" { type = string }
 variable "ecs_security_group_id" { type = string }
 
-variable "service_discovery_arn" {
+variable "target_group_arn" {
   type    = string
 }
 

@@ -58,12 +58,12 @@ resource "aws_ecs_service" "service" {
     security_groups  = [var.ecs_security_group_id]
   }
 
-  dynamic "service_registries" {
-    for_each = var.service_discovery_arn != "" ? [1] : []
+  dynamic "load_balancer" {
+    for_each = var.target_group_arn != "" ? [1] : []
     content {
-      registry_arn   = var.service_discovery_arn
-      container_name = "web-app" # This must match your container definition name
-      container_port = 8080
+      target_group_arn = var.target_group_arn
+      container_name   = "web-app" # This must match your container definition name
+      container_port   = 8080
     }
   }
 }
