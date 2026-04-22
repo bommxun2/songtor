@@ -40,6 +40,11 @@ resource "aws_route_table_association" "a" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_route_table_association" "b" {
+  subnet_id      = aws_subnet.public_subnet_2.id
+  route_table_id = aws_route_table.public.id
+}
+
 resource "aws_security_group" "ecs" {
   name   = var.ecs_security_group_name
   vpc_id = aws_vpc.vpc.id
