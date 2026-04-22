@@ -62,6 +62,11 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
 	listIncomingHandler := handlers.NewListIncomingHandler(db)
 
+	// Health check for ALB
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
 	v1 := app.Group("/v1")
 	v1.Post("/notifications", notificationHandler.CreateNotification)
 	v1.Get("/hospitals/:hospital_id/incoming-notifications", listIncomingHandler.ListIncomingPatients)
