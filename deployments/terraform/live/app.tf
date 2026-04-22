@@ -41,8 +41,6 @@ module "apigateway" {
   vpc_id             = module.security_group.vpc_id
   subnet_ids         = module.security_group.subnet_ids
   security_group_ids = [module.security_group.ecs_security_group_id]
-  namespace_name = "local.internal"
-  service_name = "fargate-service"
 }
 
 module "sns" {
@@ -59,7 +57,7 @@ module "ecs" {
   container_image = "${module.ecr.ecr_repository_url}:latest"
   ecs_subnet_id = module.security_group.subnet_id
   ecs_security_group_id = module.security_group.ecs_security_group_id
-  service_discovery_arn = module.apigateway.service_discovery_arn
+  target_group_arn = module.apigateway.target_group_arn
 
   // In a production environment, you should use AWS Secrets Manager or AWS Systems Manager Parameter Store to manage sensitive information like database credentials.
   environment_variables = [
