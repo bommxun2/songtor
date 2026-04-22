@@ -65,3 +65,7 @@ Desktop.ini
 # Go app
 bootstrap
 *.zip
+
+# Local Dev DB Tools
+docker-compose.yml
+pgadmin-servers.json
