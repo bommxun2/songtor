@@ -1,18 +1,35 @@
-resource "aws_service_discovery_private_dns_namespace" "this" {
-  name        = var.namespace_name
-  description = "Namespace for Fargate services"
-  vpc         = var.vpc_id
+resource "aws_lb" "this" {
+  name               = "fargate-alb"
+  internal           = true
+  load_balancer_type = "application"
+  security_groups    = var.security_group_ids
+  subnets            = var.subnet_ids
 }
 
-resource "aws_service_discovery_service" "this" {
-  name = var.service_name
-  dns_config {
-    namespace_id = aws_service_discovery_private_dns_namespace.this.id
-    dns_records {
-      ttl  = 10
-      type = "SRV" # SRV record is required for API Gateway Cloud Map integration
-    }
-    routing_policy = "MULTIVALUE"
+resource "aws_lb_target_group" "this" {
+  name        = "fargate-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = var.vpc_id
+
+  health_check {
+    path                = "/"
+    healthy_threshold   = 2
+    unhealthy_threshold = 10
+    timeout             = 5
+    interval            = 10
+  }
+}
+
+resource "aws_lb_listener" "this" {
+  load_balancer_arn = aws_lb.this.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.this.arn
   }
 }
 
@@ -34,10 +51,9 @@ resource "aws_apigatewayv2_stage" "this" {
 }
 
 resource "aws_apigatewayv2_integration" "this" {
-  api_id           = aws_apigatewayv2_api.this.id
-  integration_type = "HTTP_PROXY"
-  integration_uri  = aws_service_discovery_service.this.arn
-
+  api_id             = aws_apigatewayv2_api.this.id
+  integration_type   = "HTTP_PROXY"
+  integration_uri    = aws_lb_listener.this.arn
   integration_method = "ANY"
   connection_type    = "VPC_LINK"
   connection_id      = aws_apigatewayv2_vpc_link.this.id
