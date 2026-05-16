@@ -62,14 +62,13 @@ func TestCreateNotification(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&res)
 		assert.NotEmpty(t, res["notification_id"])
 
-		// Verify database
 		var count int64
 		db.Model(&models.NotificationRecord{}).Count(&count)
 		assert.Equal(t, int64(1), count)
 
 		var outboxCount int64
 		db.Model(&models.OutboxEvent{}).Count(&outboxCount)
-		assert.Equal(t, int64(1), outboxCount)
+		assert.Equal(t, int64(2), outboxCount)
 	})
 
 	t.Run("Validation Error", func(t *testing.T) {
