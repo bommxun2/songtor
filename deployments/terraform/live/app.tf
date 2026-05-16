@@ -43,10 +43,16 @@ module "apigateway" {
   security_group_ids = [module.security_group.ecs_security_group_id]
 }
 
-module "sns" {
+module "patient_reported_sns" {
   source = "../modules/sns"
 
-  topic_name = "patient-topic"
+  topic_name = "patient-reported-topic"
+}
+
+module "critical_case_sns" {
+  source = "../modules/sns"
+
+  topic_name = "critical-case-topic"
 }
 
 module "ecs" {
@@ -66,7 +72,9 @@ module "ecs" {
     { name = "DB_HOST",       value = module.rds.rds_address },
     { name = "DB_PORT",       value = "5432" },
     { name = "DB_NAME",       value = "goappdb" },
-    { name = "SNS_TOPIC_ARN", value = module.sns.sns_topic_arn }
+    { name = "SNS_PATIENT_REPORTED_TOPIC_ARN", value = module.patient_reported_sns.sns_topic_arn },
+    { name = "SNS_CRITICAL_CASE_TOPIC_ARN", value = module.critical_case_sns.sns_topic_arn },
+    { name = "HOSPITAL_RESOURCE_SERVICE_HOST", value = "" }
   ]
 }
 
@@ -88,8 +96,13 @@ module "sqs" {
   source = "../modules/sqs"
 
   request_queue_name = "inbound-load-req"
+
+  // For testing purposes
   reply_queue_name   = "reply-queue"
-  sns_topic_arn      = module.sns.sns_topic_arn
+  sns_topic_arn = [
+    module.patient_reported_sns.sns_topic_arn,
+    module.critical_case_sns.sns_topic_arn
+  ]
   enable_sns_subscription = true
 }
 

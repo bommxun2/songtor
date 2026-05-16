@@ -7,8 +7,7 @@ variable "reply_queue_name" {
 }
 
 variable "sns_topic_arn" {
-  type        = string
-  default     = null
+  type = list(string)
 }
 
 variable "enable_sns_subscription" {
