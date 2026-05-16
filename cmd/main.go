@@ -59,8 +59,8 @@ func main() {
 
 	// 3. Handlers & Routes
 	app := fiber.New()
-	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
-	listIncomingHandler := handlers.NewListIncomingHandler(db)
+	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_PATIENT_REPORTED_TOPIC_ARN"), os.Getenv("SNS_CRITICAL_CASE_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
+	listNotificationHandler := handlers.NewListNotificationHandler(db)
 
 	// Health check for ALB
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -69,7 +69,7 @@ func main() {
 
 	v1 := app.Group("/v1")
 	v1.Post("/notifications", notificationHandler.CreateNotification)
-	v1.Get("/hospitals/:hospital_id/incoming-notifications", listIncomingHandler.ListIncomingPatients)
+	v1.Get("/hospitals/:hospital_id/incoming-notifications", listNotificationHandler.ListNotifications)
 
 	// 4. Background Workers
 	workers.StartOutboxWorker(db, snsClient)
