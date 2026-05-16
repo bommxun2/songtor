@@ -24,3 +24,10 @@ type Characteristics struct {
 type Media struct {
 	MissingPersonPhoto string `json:"missing_person_photo"`
 }
+
+// Response for sending sns to hospital resource monitoring service
+type CriticalCaseNotification struct {
+	HospitalID  string `json:"hospital_id"`
+	TriageLevel string `json:"triage_level"`
+	Status      string `json:"status"`
+}
