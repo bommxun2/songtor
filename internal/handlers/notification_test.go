@@ -8,8 +8,8 @@ import (
 	"songtor/internal/models"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/glebarez/sqlite"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 func TestCreateNotification(t *testing.T) {
 	db := setupTestDB(t)
 	app := fiber.New()
-	h := NewNotificationHandler(db, "arn:aws:sns:topic", "")
+	h := NewNotificationHandler(db, "arn:aws:sns:topic", "arn:aws:sns:topic", "")
 
 	app.Post("/notifications", h.CreateNotification)
 

@@ -13,14 +13,16 @@ import (
 
 type NotificationHandler struct {
 	db                             *gorm.DB
-	topicArn                       string
+	PatientReportedTopicArn        string
+	CriticalCaseTopicArn           string
 	HOSPITAL_RESOURCE_SERVICE_HOST string
 }
 
-func NewNotificationHandler(db *gorm.DB, topicArn string, HOSPITAL_RESOURCE_SERVICE_HOST string) *NotificationHandler {
+func NewNotificationHandler(db *gorm.DB, PatientReportedTopicArn string, CriticalCaseTopicArn string, HOSPITAL_RESOURCE_SERVICE_HOST string) *NotificationHandler {
 	return &NotificationHandler{
 		db:                             db,
-		topicArn:                       topicArn,
+		PatientReportedTopicArn:        PatientReportedTopicArn,
+		CriticalCaseTopicArn:           CriticalCaseTopicArn,
 		HOSPITAL_RESOURCE_SERVICE_HOST: HOSPITAL_RESOURCE_SERVICE_HOST,
 	}
 }
@@ -107,8 +109,8 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
 	}
 
-	// Create outbox event for SNS if topic ARN is configured
-	if h.topicArn != "" {
+	// Create outbox event for PatientReportedSNS if topic ARN is configured
+	if h.PatientReportedTopicArn != "" {
 		patientTransferReq := dto.PatientTransferRequest{
 			DestinationHospitalID: req.HospitalID,
 			Characteristics:       dto.Characteristics(req.PatientInfo),
@@ -119,18 +121,42 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		}
 		messageBytes, err := json.Marshal(patientTransferReq)
 		if err != nil {
-			fmt.Printf("Failed to marshal SNS message: %v\n", err)
+			fmt.Printf("Failed to marshal PatientReportedSNS message: %v\n", err)
 		}
 
 		outboxEvent := models.OutboxEvent{
-			TopicARN: h.topicArn,
+			TopicARN: h.PatientReportedTopicArn,
 			Payload:  string(messageBytes),
 			Status:   "PENDING",
 		}
 
 		if err := tx.Create(&outboxEvent).Error; err != nil {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create outbox event"})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create PatientReported outbox event"})
+		}
+	}
+
+	// Create outbox event for CriticalCaseSNS if topic ARN is configured
+	if h.CriticalCaseTopicArn != "" {
+		criticalCaseReq := dto.CriticalCaseNotification{
+			HospitalID:  req.HospitalID,
+			TriageLevel: req.TriageLevel,
+			Status:      "EN_ROUTE",
+		}
+		messageBytes, err := json.Marshal(criticalCaseReq)
+		if err != nil {
+			fmt.Printf("Failed to marshal CriticalCaseSNS message: %v\n", err)
+		}
+
+		outboxEvent := models.OutboxEvent{
+			TopicARN: h.CriticalCaseTopicArn,
+			Payload:  string(messageBytes),
+			Status:   "PENDING",
+		}
+
+		if err := tx.Create(&outboxEvent).Error; err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create CriticalCase outbox event"})
 		}
 	}
 
