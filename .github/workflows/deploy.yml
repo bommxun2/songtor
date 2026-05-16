@@ -5,9 +5,13 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  GO_VERSION: '1.24'
+
 jobs:
-  deploy:
-    name: Build and Deploy
+  lint-and-test:
+    name: Lint and Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -16,7 +20,22 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run Go Vet
+        run: go vet ./...
+
+      - name: Run Go Test
+        run: go test -v ./...
+
+  deploy-ecr:
+    name: Deploy ECR
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Install OpenTofu
         uses: opentofu/setup-opentofu@v1
@@ -27,7 +46,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize OpenTofu
         working-directory: deployments/terraform/live
@@ -42,25 +61,92 @@ jobs:
           fi
           tofu apply -target="module.ecr" -auto-approve
 
+  build-docker:
+    name: Build and Push Docker Image
+    needs: deploy-ecr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Go App Image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: go-app
-          IMAGE_TAG: latest
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f deployments/dockerfile .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deployments/dockerfile
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/go-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-lambda:
+    name: Build Lambda
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Build Lambda Function
         run: |
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o deployments/terraform/live/bootstrap cmd/lambda/inbound_load/main.go
-          cd deployments/terraform/live
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bootstrap cmd/lambda/inbound_load/main.go
           zip inbound_load.zip bootstrap
-          rm bootstrap
+
+      - name: Upload Lambda Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-zip
+          path: inbound_load.zip
+
+  deploy-infra:
+    name: Deploy Infrastructure
+    needs: [build-docker, build-lambda]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Lambda Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-zip
+          path: deployments/terraform/live/
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Initialize OpenTofu
+        working-directory: deployments/terraform/live
+        run: tofu init
 
       - name: Deploy Remaining Infrastructure
         working-directory: deployments/terraform/live
