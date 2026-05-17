@@ -96,7 +96,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 			}
 		}
 
-		if len(resource.Data.Resources)/2 <= resourceCriticalCount {
+		if len(resource.Data.Resources) > 0 && float64(resourceCriticalCount) >= float64(len(resource.Data.Resources))/2.0 {
 			fmt.Printf("Hospital resources are in CRITICAL status: %v\n", resource)
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
 		}
