@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"songtor/internal/dto"
 	"songtor/internal/models"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -61,39 +62,37 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		},
 	}
 
-	/*
-		if h.HOSPITAL_RESOURCE_SERVICE_HOST != "" {
-			isResourceAvailable := false
+	if h.HOSPITAL_RESOURCE_SERVICE_HOST != "" {
+		isResourceAvailable := false
 
-			// Check hospital resources
-			agent := fiber.Get("http://" + h.HOSPITAL_RESOURCE_SERVICE_HOST + "/hospital/" + req.HospitalID + "/resources").
-				agent.Timeout(20 * time.Second)
+		// Check hospital resources
+		agent := fiber.Get(h.HOSPITAL_RESOURCE_SERVICE_HOST + "/v1/hospitals/" + req.HospitalID + "/resources")
+		agent.Timeout(20 * time.Second)
 
-			statusCode, body, errs := agent.Bytes()
-			if errs != nil || statusCode != fiber.StatusOK {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital resources"})
-			} else {
-				// Parse the hospital resource response
-				var resource HospitalResourceResponse
-				if err := json.Unmarshal(body, &resource); err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to parse JSON response"})
-				} else {
-					isResourceAvailable = true
-				}
-			}
-
-			if isResourceAvailable {
-				// Check if any resource is in CRITICAL status
-				for _, resource := range resource.Resources {
-					if resource.resourceStatus == "CRITICAL" {
-						return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
-					}
-				}
-			}
+		statusCode, body, errs := agent.Bytes()
+		var resource dto.HospitalResourceResponse
+		if errs != nil || statusCode != fiber.StatusOK {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital resources"})
 		} else {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
+			// Parse the hospital resource response
+			if err := json.Unmarshal(body, &resource); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to parse JSON response"})
+			} else {
+				isResourceAvailable = true
+			}
 		}
-	*/
+
+		if isResourceAvailable {
+			// Check if any resource is in CRITICAL status
+			for _, resource := range resource.Resources {
+				if resource.ResourceStatus == "CRITICAL" {
+					return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
+				}
+			}
+		}
+	} else {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
+	}
 
 	tx := h.db.Begin()
 	defer func() {
@@ -177,29 +176,29 @@ func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
 	if req.HospitalID == "" || req.PatientInfo.PhysicalDesc == "" || req.PatientInfo.AgeCategory == "" ||
 		req.PatientInfo.LifeStatus == "" || req.PatientInfo.Gender == "" || req.TriageLevel == "" || req.Symptom == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":    "Missing required fields",
-			"code":     "VALIDATION_ERROR",
+			"error": "Missing required fields",
+			"code":  "VALIDATION_ERROR",
 		})
 	}
 
 	if req.TriageLevel != "RED" && req.TriageLevel != "YELLOW" && req.TriageLevel != "GREEN" && req.TriageLevel != "BLACK" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":    "Invalid triage level",
-			"code":     "VALIDATION_ERROR",
+			"error": "Invalid triage level",
+			"code":  "VALIDATION_ERROR",
 		})
 	}
 
 	if req.PatientInfo.AgeCategory != "ADULT" && req.PatientInfo.AgeCategory != "INFANTS" && req.PatientInfo.AgeCategory != "TEEN" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":    "Invalid age category",
-			"code":     "VALIDATION_ERROR",
+			"error": "Invalid age category",
+			"code":  "VALIDATION_ERROR",
 		})
 	}
 
 	if req.PatientInfo.LifeStatus != "ALIVE" && req.PatientInfo.LifeStatus != "DECEASED" && req.PatientInfo.LifeStatus != "UNKNOWN" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":    "Invalid life status",
-			"code":     "VALIDATION_ERROR",
+			"error": "Invalid life status",
+			"code":  "VALIDATION_ERROR",
 		})
 	}
 

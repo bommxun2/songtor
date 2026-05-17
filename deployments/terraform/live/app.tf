@@ -80,7 +80,7 @@ module "ecs" {
     { name = "DB_NAME",       value = "goappdb" },
     { name = "SNS_PATIENT_REPORTED_TOPIC_ARN", value = module.patient_reported_sns.sns_topic_arn },
     { name = "SNS_CRITICAL_CASE_TOPIC_ARN", value = module.critical_case_sns.sns_topic_arn },
-    { name = "HOSPITAL_RESOURCE_SERVICE_HOST", value = "" }
+    { name = "HOSPITAL_RESOURCE_SERVICE_HOST", value = "https://xvvwesom7h.execute-api.us-east-1.amazonaws.com" }
   ]
 }
 
