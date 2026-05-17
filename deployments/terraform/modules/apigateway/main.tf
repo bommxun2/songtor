@@ -42,6 +42,13 @@ resource "aws_apigatewayv2_vpc_link" "this" {
 resource "aws_apigatewayv2_api" "this" {
   name          = "fargate-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["*"]
+    allow_headers = ["*"]
+    max_age       = 300
+  }
 }
 
 resource "aws_apigatewayv2_stage" "this" {
