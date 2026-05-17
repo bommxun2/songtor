@@ -63,6 +63,8 @@ func main() {
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowHeaders: "Content-Type, Authorization, Idempotency-Key",
 	}))
 
 	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_PATIENT_REPORTED_TOPIC_ARN"), os.Getenv("SNS_CRITICAL_CASE_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
