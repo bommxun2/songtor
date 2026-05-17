@@ -179,7 +179,6 @@ func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":    "Missing required fields",
 			"code":     "VALIDATION_ERROR",
-			"trace_id": c.Get("X-Trace-ID"),
 		})
 	}
 
@@ -187,7 +186,6 @@ func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":    "Invalid triage level",
 			"code":     "VALIDATION_ERROR",
-			"trace_id": c.Get("X-Trace-ID"),
 		})
 	}
 
@@ -195,7 +193,6 @@ func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":    "Invalid age category",
 			"code":     "VALIDATION_ERROR",
-			"trace_id": c.Get("X-Trace-ID"),
 		})
 	}
 
@@ -203,7 +200,6 @@ func ValidateEmergencyRequest(req *dto.EmergencyRequest, c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":    "Invalid life status",
 			"code":     "VALIDATION_ERROR",
-			"trace_id": c.Get("X-Trace-ID"),
 		})
 	}
 
