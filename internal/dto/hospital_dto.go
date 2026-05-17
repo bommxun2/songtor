@@ -2,6 +2,11 @@ package dto
 
 // Response from hospital resource service
 type HospitalResourceResponse struct {
+	TraceId string               `json:"traceId"`
+	Data    HospitalResourceData `json:"data"`
+}
+
+type HospitalResourceData struct {
 	HospitalID string     `json:"hospitalId"`
 	Resources  []Resource `json:"resources"`
 }
