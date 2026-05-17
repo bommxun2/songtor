@@ -7,7 +7,7 @@ resource "aws_sqs_queue" "reply_queue" {
 }
 
 resource "aws_sns_topic_subscription" "reply_queue_subscription" {
-  for_each  = var.enable_sns_subscription ? toset(var.sns_topic_arn) : []
+  for_each  = var.enable_sns_subscription ? { for idx, arn in var.sns_topic_arn : tostring(idx) => arn } : {}
   topic_arn = each.value
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.reply_queue.arn
