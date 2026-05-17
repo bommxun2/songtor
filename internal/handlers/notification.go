@@ -86,14 +86,19 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 			}
 		}
 
+		var resourceCriticalCount int
 		if isResourceAvailable {
 			// Check if any resource is in CRITICAL status
 			for _, resource := range resource.Data.Resources {
 				if resource.ResourceStatus == "CRITICAL" {
-					fmt.Printf("Hospital resources are in CRITICAL status: %v\n", resource)
-					return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
+					resourceCriticalCount++
 				}
 			}
+		}
+
+		if len(resource.Data.Resources)/2 <= resourceCriticalCount {
+			fmt.Printf("Hospital resources are in CRITICAL status: %v\n", resource)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
 		}
 	} else {
 		fmt.Println("HOSPITAL_RESOURCE_SERVICE_HOST is not configured, skipping hospital resource check")
