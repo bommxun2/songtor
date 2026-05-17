@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 
@@ -59,6 +60,11 @@ func main() {
 
 	// 3. Handlers & Routes
 	app := fiber.New()
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+	}))
+
 	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_PATIENT_REPORTED_TOPIC_ARN"), os.Getenv("SNS_CRITICAL_CASE_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
 	listNotificationHandler := handlers.NewListNotificationHandler(db)
 
