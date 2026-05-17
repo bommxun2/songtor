@@ -74,7 +74,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		statusCode, body, errs := agent.Bytes()
 		var resource dto.HospitalResourceResponse
 		if errs != nil || statusCode != fiber.StatusOK {
-			fmt.Printf("Failed to fetch hospital resources: %v\n", errs)
+			fmt.Printf("Failed to fetch hospital resources: %v\n", body)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital resources"})
 		} else {
 			// Parse the hospital resource response
