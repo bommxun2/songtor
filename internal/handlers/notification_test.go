@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"songtor/internal/dto"
 	"songtor/internal/models"
@@ -31,14 +32,21 @@ func setupTestDB(t *testing.T) *gorm.DB {
 func TestCreateNotification(t *testing.T) {
 	db := setupTestDB(t)
 	app := fiber.New()
-	h := NewNotificationHandler(db, "arn:aws:sns:topic", "arn:aws:sns:topic", "")
+	
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"resources": []}`))
+	}))
+	defer mockServer.Close()
+
+	h := NewNotificationHandler(db, "arn:aws:sns:topic", "arn:aws:sns:topic", mockServer.URL)
 
 	app.Post("/notifications", h.CreateNotification)
 
 	t.Run("Success", func(t *testing.T) {
 		reqBody := dto.EmergencyRequest{
-			HospitalID:  "hosp1",
-			AmbulanceID: "amb1",
+			HospitalID:  "H001",
+			AmbulanceID: "A001",
 			PatientInfo: dto.PatientInfo{
 				Gender:       "MALE",
 				AgeCategory:  "ADULT",
@@ -54,18 +62,25 @@ func TestCreateNotification(t *testing.T) {
 		req := httptest.NewRequest("POST", "/notifications", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, _ := app.Test(req)
+		resp, err := app.Test(req, 30000)
+		if err != nil {
+			t.Fatalf("app.Test failed: %v", err)
+		}
 
+		// Test response status code
 		assert.Equal(t, fiber.StatusCreated, resp.StatusCode)
 
+		// Test response body
 		var res map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&res)
 		assert.NotEmpty(t, res["notification_id"])
 
+		// Test database record
 		var count int64
 		db.Model(&models.NotificationRecord{}).Count(&count)
 		assert.Equal(t, int64(1), count)
 
+		// Test outbox event
 		var outboxCount int64
 		db.Model(&models.OutboxEvent{}).Count(&outboxCount)
 		assert.Equal(t, int64(2), outboxCount)
@@ -80,7 +95,10 @@ func TestCreateNotification(t *testing.T) {
 		req := httptest.NewRequest("POST", "/notifications", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, _ := app.Test(req)
+		resp, err := app.Test(req, 30000)
+		if err != nil {
+			t.Fatalf("app.Test failed: %v", err)
+		}
 
 		assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
 	})

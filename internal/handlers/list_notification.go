@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"songtor/internal/dto"
 	"songtor/internal/models"
 	"strconv"
@@ -21,6 +22,7 @@ func NewListNotificationHandler(db *gorm.DB) *ListNotificationHandler {
 func (h *ListNotificationHandler) ListNotifications(c *fiber.Ctx) error {
 	hospitalID := c.Params("hospital_id")
 	if hospitalID == "" {
+		fmt.Println("Validation error: hospital_id is required")
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
 			Error: dto.ErrorDetail{
 				Code:    "VALIDATION_ERROR",
@@ -38,6 +40,7 @@ func (h *ListNotificationHandler) ListNotifications(c *fiber.Ctx) error {
 		Find(&notifications).Error
 
 	if err != nil {
+		fmt.Printf("Failed to fetch notifications: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error: dto.ErrorDetail{
 				Code:    "INTERNAL_ERROR",

@@ -32,11 +32,13 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 	// Parse the request body
 	var req dto.EmergencyRequest
 	if err := c.BodyParser(&req); err != nil {
+		fmt.Printf("Failed to parse request body: %v\n", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
 	// Validate the request
 	if err := ValidateEmergencyRequest(&req, c); err != nil {
+		fmt.Printf("Validation failed: %v\n", err)
 		return err
 	}
 
@@ -72,10 +74,12 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		statusCode, body, errs := agent.Bytes()
 		var resource dto.HospitalResourceResponse
 		if errs != nil || statusCode != fiber.StatusOK {
+			fmt.Printf("Failed to fetch hospital resources: %v\n", errs)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch hospital resources"})
 		} else {
 			// Parse the hospital resource response
 			if err := json.Unmarshal(body, &resource); err != nil {
+				fmt.Printf("Failed to parse hospital resource response: %v\n", err)
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to parse JSON response"})
 			} else {
 				isResourceAvailable = true
@@ -84,13 +88,15 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 
 		if isResourceAvailable {
 			// Check if any resource is in CRITICAL status
-			for _, resource := range resource.Resources {
+			for _, resource := range resource.Data.Resources {
 				if resource.ResourceStatus == "CRITICAL" {
+					fmt.Printf("Hospital resources are in CRITICAL status: %v\n", resource)
 					return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "Hospital resources are currently unavailable"})
 				}
 			}
 		}
 	} else {
+		fmt.Println("HOSPITAL_RESOURCE_SERVICE_HOST is not configured, skipping hospital resource check")
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
 	}
 
@@ -105,6 +111,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 	// Create the notification record
 	if err := tx.Create(&notification).Error; err != nil {
 		tx.Rollback()
+		fmt.Printf("Failed to create notification record: %v\n", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create notification"})
 	}
 
@@ -131,6 +138,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 
 		if err := tx.Create(&outboxEvent).Error; err != nil {
 			tx.Rollback()
+			fmt.Printf("Failed to create PatientReportedSNS outbox event: %v\n", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create PatientReported outbox event"})
 		}
 	}
@@ -155,6 +163,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 
 		if err := tx.Create(&outboxEvent).Error; err != nil {
 			tx.Rollback()
+			fmt.Printf("Failed to create CriticalCase outbox event: %v\n", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create CriticalCase outbox event"})
 		}
 	}
