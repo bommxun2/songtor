@@ -1,3 +1,9 @@
+variable "image_tag" {
+  description = "The tag of the docker image to deploy"
+  type        = string
+  default     = "latest"
+}
+
 terraform {
   required_providers {
     aws = {
@@ -60,7 +66,7 @@ module "ecs" {
 
   ecs_cluster_name = "go-app-cluster"
   ecs_service_name = "go-app-service"
-  container_image = "${module.ecr.ecr_repository_url}:latest"
+  container_image = "${module.ecr.ecr_repository_url}:${var.image_tag}"
   ecs_subnet_id = module.security_group.subnet_id
   ecs_security_group_id = module.security_group.ecs_security_group_id
   target_group_arn = module.apigateway.target_group_arn

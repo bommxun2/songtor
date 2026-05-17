@@ -67,10 +67,6 @@ func main() {
 		AllowHeaders: "Content-Type, Authorization, Idempotency-Key",
 	}))
 
-	app.Options("/*", func(c *fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
 	notificationHandler := handlers.NewNotificationHandler(db, os.Getenv("SNS_PATIENT_REPORTED_TOPIC_ARN"), os.Getenv("SNS_CRITICAL_CASE_TOPIC_ARN"), os.Getenv("HOSPITAL_RESOURCE_SERVICE_HOST"))
 	listNotificationHandler := handlers.NewListNotificationHandler(db)
 

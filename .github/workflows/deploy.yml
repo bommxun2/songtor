@@ -90,7 +90,9 @@ jobs:
           context: .
           file: deployments/dockerfile
           push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/go-app:latest
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/go-app:latest
+            ${{ steps.login-ecr.outputs.registry }}/go-app:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -150,4 +152,6 @@ jobs:
 
       - name: Deploy Remaining Infrastructure
         working-directory: deployments/terraform/live
+        env:
+          TF_VAR_image_tag: ${{ github.sha }}
         run: tofu apply -auto-approve
