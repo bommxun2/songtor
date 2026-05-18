@@ -48,7 +48,7 @@ func processOutboxEvents(db *gorm.DB, snsClient SNSAPI) {
 			fmt.Printf("[Worker Error] Failed to publish event ID %d: %v\n", event.ID, err)
 			db.Model(&event).Update("status", "FAILED")
 		} else {
-			fmt.Printf("[Worker Success] Event ID %d published to SNS\n", event.ID)
+			fmt.Printf("[Worker Success] Event ID %d published to SNS %s Contain %s\n", event.ID, event.TopicARN, event.Payload)
 			db.Delete(&event)
 		}
 	}
